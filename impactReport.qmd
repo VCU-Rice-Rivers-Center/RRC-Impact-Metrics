@@ -1,9 +1,30 @@
+---
+title: "Rice Rivers Center - Impact Reporting"
+date: "`r Sys.Date()`"
+format: 
+  html: 
+    self-contained: true
+    grid:
+      margin-width: 350px
+execute:
+  echo: false
+reference-location: margin
+---
+
+```{r}
+#| output: false
+
 # Load packages
 library(googlesheets4)
 library(dplyr)
 library(tidyr)
 library(lubridate)
 library(strex)
+library(knitr)
+```
+
+```{r}
+#| output: false
 
 ######################
 ### Authentication ###
@@ -29,6 +50,9 @@ if (nzchar(gcp_key)) {
 # Sheet ID for reservation request form responses:
 sheet_id <- "1ed3zy3QERXUd7yMlfxtwxqAu3sqhpNWP-TScr1Y_dMM"
 reservations <- read_sheet(sheet_id)
+```
+
+```{r}
 
 ##################
 ### Processing ###
@@ -177,41 +201,25 @@ fees_waived_proportion <- nrow(
     filter(`Is your group in the School of Life Sciences and Sustainability` == "Yes")
 ) / nrow(reservations)
 
-#######################
-### Display Metrics ###
-#######################
+```
 
-students_per_year
+This is a report of facility usage and engagement for the Rice Rivers Center. Data for this report
+comes from the following sources:
 
-vcu_staff_per_year
+1. Responses to the Rice Rivers Center [Reservation Form](https://ricerivers.vcu.edu/facilities/reservations/) (which handles reservations for RRC's
+Inger Rice Lodge and Rice Education Building's Conference Room). 
+2. Submissions to the Rice Rivers Center [Project Registration Form](https://ricerivers.vcu.edu/research/conduct-research-at-rice/project-registration/) (which handles research project
+applications for VCU students, faculty, and staff.)
 
-non_vcu_per_year
+# VCU Student Usage
 
-lodge_usage_days
+### Count of VCU students reserving facilities by year
+```{r}
+students_per_year_output <- students_per_year %>%
+  mutate(estimate = paste0(students_per_year_low_estimate, " - ", students_per_year_high_estimate)) %>%
+  select(year, estimate)
+  
 
-lodge_usage_proportion
-
-lodge_revenue
-
-conference_usage_days
-
-conference_usage_proportion
-
-conference_revenue
-
-fees_waived_proportion
-
-
-t <- reservations %>%
-  filter(grepl("Inger Rice Lodge", `Facility Requested`)) %>% 
-  filter(`Is your group in the School of Life Sciences and Sustainability` == "No") %>%
-  replace_na(list(count_vcu_students_low = 0, count_vcu_students_high = 0,
-                  count_vcu_staff_low = 0, count_vcu_staff_high = 0,
-                  count_non_vcu_low = 0, count_non_vcu_high = 0)
-  ) %>%
-  mutate(
-    total_persons_low_estimate = as.numeric(count_vcu_students_low) + as.numeric(count_vcu_staff_low) + as.numeric(count_non_vcu_low),
-    total_persons_high_estimate = as.numeric(count_vcu_students_high) + as.numeric(count_vcu_staff_high) + as.numeric(count_non_vcu_high),
-    revenue_per_event_low_estimate = length_of_stay_days*lodge_cost*total_persons_low_estimate,
-    revenue_per_event_high_estimate = length_of_stay_days*lodge_cost*total_persons_high_estimate
-  )
+knitr::kable(students_per_year_output, 
+             col.names = c("Year", "Estimated Count of VCU Students"))
+```
