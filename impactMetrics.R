@@ -40,7 +40,7 @@ reservations$`How many VCU students will there be?` <- as.character(reservations
 
 
 # Calculate additional columns:
-reservations_v2 <- reservations %>%
+reservations <- reservations %>%
   mutate(
     # Calculate number of days requested
     length_of_stay_days = as.numeric(difftime(`Requested departure date`, `Requested arrival date`, units = "days")) + 1,
@@ -60,3 +60,36 @@ reservations_v2 <- reservations %>%
     count_non_vcu_low = str_first_number(`How many Non-VCU affiliated individuals will there be?`),
     count_non_vcu_high = str_last_number(`How many Non-VCU affiliated individuals will there be?`)
     )
+
+#########################
+### Calculate Metrics ###
+#########################
+
+# 1. Count of students visiting per year
+
+students_per_year <- reservations %>%
+  group_by(year) %>%
+  summarize(
+    students_per_year_low_estimate = sum(count_vcu_students_low, na.rm = TRUE),
+    students_per_year_high_estimate = sum(count_vcu_students_high, na.rm = TRUE)
+  )
+
+# 2. Count of VCU staff and faculty visiting per year
+
+vcu_staff_per_year <- reservations %>%
+  group_by(year) %>%
+  summarize(
+    vcu_staff_per_year_low_estimate = sum(count_vcu_staff_low, na.rm = TRUE),
+    vcu_staff_per_year_high_estimate = sum(count_vcu_staff_high, na.rm = TRUE)
+  )
+
+# 3. Count of non-VCU visitors per year
+
+non_vcu_per_year <- reservations %>%
+  group_by(year) %>%
+  summarize(
+    non_vcu_per_year_low_estimate = sum(count_non_vcu_low, na.rm = TRUE),
+    non_vcu_per_year_high_estimate = sum(count_non_vcu_high, na.rm = TRUE)
+  )
+
+4. 
