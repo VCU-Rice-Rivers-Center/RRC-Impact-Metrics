@@ -21,6 +21,8 @@ library(tidyr)
 library(lubridate)
 library(strex)
 library(knitr)
+library(tidytext)
+library(wordcloud)
 ```
 
 ```{r}
@@ -231,8 +233,80 @@ usage_estimate <- usage_estimate %>%
   select(year, student_estimate, staff_estimate, non_vcu_estimate, total_estimate)
 
 knitr::kable(usage_estimate,
+             caption = "Count of individual usage of the Inger Rice Lodge and the Education Building Conference Room",
              format = "simple",
              col.names = c("Year", "VCU Students", "VCU Staff & Faculty", "Non-VCU Individuals", "Total"),
              align = c("l", "c", "c", "c", "r"))
+
+```
+
+### VCU Student Engagement
+
+```{r}
+#| output: false
+
+student_reservations <- reservations %>%
+  filter(`Will your group have VCU students attending?` == "Yes")
+
+# Proportion of student group reservations that use lodge, conference room, or both
+student_reservation_facility_usage <- student_reservations %>%
+  group_by(year, `Facility Requested`) %>%
+  summarize(records = n()) %>%
+  group_by(year) %>%
+  mutate(proportion = paste0(format(round(records/sum(records)*100, 2), nsmall=2),"%")) %>%
+  select(year, `Facility Requested`, proportion) %>%
+  pivot_wider(
+    names_from = `Facility Requested`, 
+    values_from = proportion
+  ) %>%
+  ungroup() %>%
+  replace(is.na(.), "0%") %>%
+  rename(Both = `Rice Education Building's Conference Room, Inger Rice Lodge`)
+
+```
+
+```{r}
+
+knitr::kable(student_reservation_facility_usage,
+             caption = "Proportion of Facility Usage by Reservations with VCU Students",
+             format = "simple",
+             col.names = c("Year", "Inger Rice Lodge Only", "Rice Education Building Only", "Both Facilities"),
+             align = c("l", "c", "c", "c"))
+
+```
+
+##### Departments and Organizations bringing VCU Students to RRC
+
+```{r}
+
+student_orgs <- unique(student_reservations$`Organization's Name`)
+cat(paste("-", student_orgs), sep="\n")
+
+```
+
+##### Key Word Analysis of VCU Student Groups
+
+```{r}
+
+tidytest <- reservations %>%
+  select(`Description of Event`) %>%
+  unnest_tokens(output = word, input = `Description of Event`)
+
+custom_stopwords <- tibble(
+  word = c("vcu", "center", "space","fall", "rice", "building", "day", "first", "2026", "lodge", "need", "one", "rivers", 
+           "20", "27", "30", "40", "aug", "available", "friday", "full", "know", "looking", "octover", "others",
+           "please", "probably"),
+  lexicon = "custom"
+)
+
+extended_stopwords <- stop_words %>%
+  bind_rows(custom_stopwords)
+
+cleaned_test <- tidytest %>%
+  anti_join(extended_stopwords, by = "word")
+
+cleaned_test %>%
+  count(word, sort = TRUE) %>%
+  with(wordcloud(word, n, max.words = 50))
 
 ```
