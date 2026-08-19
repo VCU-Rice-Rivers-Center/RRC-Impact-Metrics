@@ -211,15 +211,28 @@ Inger Rice Lodge and Rice Education Building's Conference Room).
 2. Submissions to the Rice Rivers Center [Project Registration Form](https://ricerivers.vcu.edu/research/conduct-research-at-rice/project-registration/) (which handles research project
 applications for VCU students, faculty, and staff.)
 
-# VCU Student Usage
+## Facilities Usage
 
-### Count of VCU students reserving facilities by year
 ```{r}
-students_per_year_output <- students_per_year %>%
-  mutate(estimate = paste0(students_per_year_low_estimate, " - ", students_per_year_high_estimate)) %>%
-  select(year, estimate)
-  
+# Merge tables 
+usage_estimate <- merge(students_per_year, vcu_staff_per_year, by="year")
+usage_estimate <- merge(usage_estimate, non_vcu_per_year, by="year")
+usage_estimate <- usage_estimate %>%
+  mutate(
+    total_low_estimate = students_per_year_low_estimate + vcu_staff_per_year_low_estimate + non_vcu_per_year_low_estimate,
+    total_high_estimate = students_per_year_high_estimate + vcu_staff_per_year_high_estimate + non_vcu_per_year_high_estimate
+  ) %>%
+  mutate(
+    student_estimate = paste0(students_per_year_low_estimate, " - ", students_per_year_high_estimate),
+    staff_estimate = paste0(vcu_staff_per_year_low_estimate, " - ", vcu_staff_per_year_high_estimate),
+    non_vcu_estimate = paste0(non_vcu_per_year_low_estimate, " - ", non_vcu_per_year_high_estimate),
+    total_estimate = paste0(total_low_estimate, " - ", total_high_estimate)
+  ) %>%
+  select(year, student_estimate, staff_estimate, non_vcu_estimate, total_estimate)
 
-knitr::kable(students_per_year_output, 
-             col.names = c("Year", "Estimated Count of VCU Students"))
+knitr::kable(usage_estimate,
+             format = "simple",
+             col.names = c("Year", "VCU Students", "VCU Staff & Faculty", "Non-VCU Individuals", "Total"),
+             align = c("l", "c", "c", "c", "r"))
+
 ```
