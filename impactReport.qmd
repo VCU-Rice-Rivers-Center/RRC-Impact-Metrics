@@ -213,7 +213,7 @@ Inger Rice Lodge and Rice Education Building's Conference Room).
 2. Submissions to the Rice Rivers Center [Project Registration Form](https://ricerivers.vcu.edu/research/conduct-research-at-rice/project-registration/) (which handles research project
 applications for VCU students, faculty, and staff.)
 
-## Facilities Usage
+# Facilities Usage
 
 ```{r}
 # Merge tables 
@@ -268,19 +268,109 @@ student_reservation_facility_usage <- student_reservations %>%
 ```{r}
 
 knitr::kable(student_reservation_facility_usage,
-             caption = "Proportion of Facility Usage by Reservations with VCU Students",
+             caption = "Proportion of Facility Usage by Reservations incvolving VCU Students",
              format = "simple",
              col.names = c("Year", "Inger Rice Lodge Only", "Rice Education Building Only", "Both Facilities"),
              align = c("l", "c", "c", "c"))
 
 ```
 
-##### Departments and Organizations bringing VCU Students to RRC
+\n
+In 2026, the following groups reserved facilities at the Rice Rivers Center and brought VCU students:
 
 ```{r}
 
-student_orgs <- unique(student_reservations$`Organization's Name`)
+student_orgs <- unique(student_reservations$`Organization's Name`[student_reservations$year == 2026])
 cat(paste("-", student_orgs), sep="\n")
+
+```
+
+### VCU Faculty & Staff Engagement
+
+```{r}
+#| output: false
+
+staff_reservations <- reservations %>%
+  filter(`Will your group have VCU employees attending?` == "Yes")
+
+# Proportion of student group reservations that use lodge, conference room, or both
+staff_reservation_facility_usage <- staff_reservations %>%
+  group_by(year, `Facility Requested`) %>%
+  summarize(records = n()) %>%
+  group_by(year) %>%
+  mutate(proportion = paste0(format(round(records/sum(records)*100, 2), nsmall=2),"%")) %>%
+  select(year, `Facility Requested`, proportion) %>%
+  pivot_wider(
+    names_from = `Facility Requested`, 
+    values_from = proportion
+  ) %>%
+  ungroup() %>%
+  replace(is.na(.), "0%") %>%
+  rename(Both = `Rice Education Building's Conference Room, Inger Rice Lodge`)
+
+```
+
+```{r}
+
+knitr::kable(staff_reservation_facility_usage,
+             caption = "Proportion of Facility Usage by Reservations involving VCU Faculty & Staff",
+             format = "simple",
+             col.names = c("Year", "Inger Rice Lodge Only", "Rice Education Building Only", "Both Facilities"),
+             align = c("l", "c", "c", "c"))
+
+```
+
+\n
+In 2026, the following groups reserved facilities at the Rice Rivers Center and brought VCU faculty and staff:
+
+```{r}
+
+staff_orgs <- unique(staff_reservations$`Organization's Name`[staff_reservations$year == 2026])
+cat(paste("-", staff_orgs), sep="\n")
+
+```
+### Non-VCU Engagement
+
+```{r}
+#| output: false
+
+non_vcu_reservations <- reservations %>%
+  filter(`Will your group have Non-VCU affiliated individuals attending?` == "Yes")
+
+# Proportion of student group reservations that use lodge, conference room, or both
+non_vcu_reservation_facility_usage <- non_vcu_reservations %>%
+  group_by(year, `Facility Requested`) %>%
+  summarize(records = n()) %>%
+  group_by(year) %>%
+  mutate(proportion = paste0(format(round(records/sum(records)*100, 2), nsmall=2),"%")) %>%
+  select(year, `Facility Requested`, proportion) %>%
+  pivot_wider(
+    names_from = `Facility Requested`, 
+    values_from = proportion
+  ) %>%
+  ungroup() %>%
+  replace(is.na(.), "0%") %>%
+  rename(Both = `Rice Education Building's Conference Room, Inger Rice Lodge`)
+
+```
+
+```{r}
+
+knitr::kable(non_vcu_reservation_facility_usage,
+             caption = "Proportion of Facility Usage by Reservations involving Non-VCU Affiliated Individuals",
+             format = "simple",
+             col.names = c("Year", "Inger Rice Lodge Only", "Rice Education Building Only", "Both Facilities"),
+             align = c("l", "c", "c", "c"))
+
+```
+
+\n
+In 2026, the following groups reserved facilities at the Rice Rivers Center and brought individuals not affiliated with VCU:
+
+```{r}
+
+non_vcu_orgs <- unique(non_vcu_reservations$`Organization's Name`[non_vcu_reservations$year == 2026])
+cat(paste("-", non_vcu_orgs), sep="\n")
 
 ```
 
