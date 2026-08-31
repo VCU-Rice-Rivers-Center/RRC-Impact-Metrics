@@ -240,6 +240,24 @@ knitr::kable(usage_estimate,
 
 ```
 
+```{r}
+# Lodge usage days
+knitr::kable(
+  lodge_usage_days,
+  caption = "Lodge Usage in Number of Days Booked per Year",
+  col.names = c("Year", "Booked Days per Year")
+)
+```
+```{r}
+# Conference Room usage days
+knitr::kable(
+  conference_usage_days,
+  caption = "Conference Room Usage in Number of Days Booked per Year",
+  col.names = c("Year", "Booked Days per Year")
+)
+```
+
+
 ### VCU Student Engagement
 
 ```{r}
