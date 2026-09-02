@@ -250,12 +250,14 @@ current_year <- year(Sys.Date())
 # Number of requests for the lodge
 lodge_reservation_request_count <- as.numeric(nrow(reservations %>%
                                           filter(year == current_year & 
-                                                   grepl("Inger Rice Lodge", `Facility Requested`))))
+                                                   grepl("Inger Rice Lodge", 
+                                                         `Facility Requested`))))
 
 # Number of requests for the lodge
 education_reservation_request_count <- as.numeric(nrow(reservations %>%
                                               filter(year == current_year & 
-                                              grepl("Rice Education Building's Conference Room", `Facility Requested`))))
+                                              grepl("Rice Education Building's Conference Room", 
+                                                    `Facility Requested`))))
 
 # Invoice total:
 current_year_invoices <- paid_invoices_by_year %>%
@@ -265,14 +267,22 @@ current_year_lodge_invoices <- current_year_invoices$lodge_invoices
 current_year_lodge_invoices_formatted <- paste0("$", format(current_year_lodge_invoices, big.mark=","))
 current_year_education_invoices <- current_year_invoices$education_invoices
 current_year_education_invoices_formatted <- paste0("$", format(current_year_education_invoices, big.mark=","))
-# current_year_research_invoices <- current_year_invoices$research_invoices
 
 current_year_total_invoices <- current_year_lodge_invoices + current_year_education_invoices
 current_year_total_invoices_formatted <- paste0("$", format(current_year_total_invoices, big.mark=","))
 
+# Days booked
+current_year_lodge_usage <- (lodge_usage_days %>%
+  filter(year == current_year))$lodge_usage_days
+
+current_year_education_usage <- (conference_usage_days %>%
+  filter(year == current_year))$conference_usage_days
+
 ```
 
 * In `{r} current_year`, there were `{r} lodge_reservation_request_count` reservation requests for the Inger Rice Lodge and `{r} education_reservation_request_count` reservation requests for the Education Building's Conference Room.
+* The Inger Rice Lodge was booked for `{r} current_year_lodge_usage` days in `{r} current_year`. 
+* The Education Building's Conference Room was booked for `{r} current_year_education_usage` days in `{r} current_year`.
 * So far in `{r} current_year`, Rice Rivers Center facilities reservations have generated `{r} current_year_total_invoices_formatted` in revenue. 
   + Inger Rice Lodge reservations have generated `{r} current_year_lodge_invoices_formatted`.
   + Education Building's Conference Room reservations have generated `{r} current_year_education_invoices_formatted`.
@@ -306,38 +316,36 @@ knitr::kable(usage_estimate,
 ```
 
 ```{r}
-# Lodge usage days
-lodge_usage <- merge(lodge_usage_days, lodge_revenue, by="year")
-lodge_usage <- lodge_usage %>%
-  mutate(
-    lodge_estimate = paste0("$", format(lodge_revenue_low_estimate, big.mark=","), " - ", format(lodge_revenue_high_estimate, big.mark=","))
-  ) %>%
-  select(year, lodge_usage_days, lodge_estimate)
 
-knitr::kable(
-  lodge_usage,
-  caption = "Lodge Usage in Number of Days Booked per Year",
-  col.names = c("Year", "Booked Days per Year", "Estimated Revenue"),
-  align = c("l", "c", "r")
-)
+# Waived Usage Fees
+current_year_waived_count <- nrow(fees_waived %>%
+                                filter(year == current_year))
+current_year_total_count <- nrow(reservations %>%
+                                   filter(year == current_year))
+
 ```
+
+
+Facility usage fees were waived for `{r} current_year_waived_count` out of `{r} current_year_total_count` total reservations in `{r} current_year`. Fees can be waived for non-profit groups, internal groups, or when there are issues with the facilities. Shown below is the breakdown of reasons for waived fees in `{r} current_year`. 
 
 ```{r}
-# Lodge usage days
-conference_usage <- merge(conference_usage_days, conference_revenue, by="year")
-conference_usage <- conference_usage %>%
-  mutate(
-    conference_estimate = paste0("$", format(conference_revenue, big.mark=","))
-  ) %>%
-  select(year, conference_usage_days, conference_estimate)
 
-knitr::kable(
-  conference_usage,
-  caption = "Conference Usage in Number of Days Booked per Year",
-  col.names = c("Year", "Booked Days per Year", "Estimated Revenue"),
-  align = c("l", "c", "r")
-)
+waived_reason_proportion <- fees_waived %>%
+  group_by(year, `Waived Reason`) %>%
+  summarize(records = n()) %>%
+  group_by(year) %>%
+  mutate(proportion = paste0(format(round(records/sum(records)*100, 2), nsmall=2),"%")) %>%
+  select(year, `Waived Reason`, proportion) %>%
+  pivot_wider(
+    names_from = `Waived Reason`, 
+    values_from = proportion) %>%
+  ungroup() %>%
+  replace(is.na(.), "0%")
+
 ```
+
+
+
 
 ### VCU Student Engagement
 
