@@ -14,7 +14,7 @@ jobs:
         uses: r-lib/actions/setup-r@v2
 
       - name: Install googlesheets4
-        run: Rscript -e 'install.packages("googlesheets4")'
+        run: Rscript -e 'install.packages("googlesheets4", "dplyr", "tidyr", "lubridate", "strex", "knitr")'
 
       - name: Run Auth Check
         env:
