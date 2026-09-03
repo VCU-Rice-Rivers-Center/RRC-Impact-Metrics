@@ -21,8 +21,6 @@ library(tidyr)
 library(lubridate)
 library(strex)
 library(knitr)
-library(tidytext)
-library(wordcloud)
 ```
 
 ```{r}
@@ -287,7 +285,7 @@ current_year_education_usage <- (conference_usage_days %>%
   + Inger Rice Lodge reservations have generated `{r} current_year_lodge_invoices_formatted`.
   + Education Building's Conference Room reservations have generated `{r} current_year_education_invoices_formatted`.
   
-Facilities have been utilized by VCU students, VCU staff & faculty, and non-VCU individuals. The table below provides an estimate on the number of individuals using Rice facilities each year. These estimates are based on responses from the the RRC Reservation Form. 
+Facilities have been utilized by VCU students, VCU staff & faculty, and non-VCU individuals. The table below provides an estimate on the number of individuals using Rice facilities each year. These estimates are based on responses from the RRC Reservation Form. 
 
 ```{r}
 # Merge tables 
@@ -325,10 +323,11 @@ current_year_total_count <- nrow(reservations %>%
 
 ```
 
-
+\
 Facility usage fees were waived for `{r} current_year_waived_count` out of `{r} current_year_total_count` total reservations in `{r} current_year`. Fees can be waived for non-profit groups, internal groups, or when there are issues with the facilities. Shown below is the breakdown of reasons for waived fees in `{r} current_year`. 
 
 ```{r}
+#| output: false
 
 waived_reason_proportion <- fees_waived %>%
   group_by(year, `Waived Reason`) %>%
@@ -340,7 +339,16 @@ waived_reason_proportion <- fees_waived %>%
     names_from = `Waived Reason`, 
     values_from = proportion) %>%
   ungroup() %>%
-  replace(is.na(.), "0%")
+  replace(is.na(.), "0%") %>%
+  select(-year) 
+  
+```
+
+```{r}
+knitr::kable(waived_reason_proportion,
+             caption = paste0("Reasons for Waived Fees in ", current_year),
+             format = "simple",
+             align = c("c", "c", "c")) 
 
 ```
 
@@ -387,6 +395,7 @@ knitr::kable(student_reservation_facility_usage,
 In 2026, the following groups reserved facilities at the Rice Rivers Center and brought VCU students:
 
 ```{r}
+#| results: "asis"
 
 student_orgs <- unique(student_reservations$`Organization's Name`[student_reservations$year == 2026])
 cat(paste("-", student_orgs), sep="\n")
@@ -432,11 +441,13 @@ knitr::kable(staff_reservation_facility_usage,
 In 2026, the following groups reserved facilities at the Rice Rivers Center and brought VCU faculty and staff:
 
 ```{r}
+#| results: "asis"
 
 staff_orgs <- unique(staff_reservations$`Organization's Name`[staff_reservations$year == 2026])
 cat(paste("-", staff_orgs), sep="\n")
 
 ```
+
 ### Non-VCU Engagement
 
 ```{r}
@@ -476,37 +487,10 @@ knitr::kable(non_vcu_reservation_facility_usage,
 In 2026, the following groups reserved facilities at the Rice Rivers Center and brought individuals not affiliated with VCU:
 
 ```{r}
+#| results: "asis"
 
 non_vcu_orgs <- unique(non_vcu_reservations$`Organization's Name`[non_vcu_reservations$year == 2026])
 cat(paste("-", non_vcu_orgs), sep="\n")
 
 ```
 
-##### Key Word Analysis of Visiting Groups
-
-```{r}
-
-tidytest <- reservations %>%
-  select(`Description of Event`) %>%
-  unnest_tokens(output = word, input = `Description of Event`)
-
-numbers <- as.character(0:2030)
-
-custom_stopwords <- tibble(
-  word = c("vcu", "center", "space","fall", "rice", "building", "day", "first", "2026", "lodge", "need", "one", "rivers", 
-           "aug", "available", "friday", "full", "know", "looking", "october", "others",
-           "please", "probably", numbers),
-  lexicon = "custom"
-)
-
-extended_stopwords <- stop_words %>%
-  bind_rows(custom_stopwords)
-
-cleaned_test <- tidytest %>%
-  anti_join(extended_stopwords, by = "word")
-
-cleaned_test %>%
-  count(word, sort = TRUE) %>%
-  with(wordcloud(word, n, max.words = 40))
-
-```
