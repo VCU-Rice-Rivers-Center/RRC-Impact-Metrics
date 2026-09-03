@@ -1,0 +1,496 @@
+---
+title: "Rice Rivers Center - Impact Reporting"
+date: "`r Sys.Date()`"
+format: 
+  html: 
+    self-contained: true
+    grid:
+      margin-width: 350px
+execute:
+  echo: false
+reference-location: margin
+---
+
+```{r}
+#| output: false
+
+# Load packages
+library(googlesheets4)
+library(dplyr)
+library(tidyr)
+library(lubridate)
+library(strex)
+library(knitr)
+```
+
+```{r}
+#| output: false
+
+######################
+### Authentication ###
+######################
+
+# Fetch the key from the system environment
+gcp_key <- Sys.getenv("GCP_SA_KEY")
+
+if (nzchar(gcp_key)) {
+  # Authenticate using the github secret key
+  gs4_auth(path = gcp_key)
+  message("Authenticated using GCP Service Account Secret")
+} else {
+  # Authenticate using a browser if testing locally
+  gs4_auth()
+  message("Authenticated via browser.")
+}
+
+#################
+### Read Data ###
+#################
+
+# Sheet ID for reservation request form responses:
+sheet_id <- "1ed3zy3QERXUd7yMlfxtwxqAu3sqhpNWP-TScr1Y_dMM"
+sheet_id_older_reservations <- "1nd2EMrJhVLAGLXVK840sgU7gEmqqZci1OvvG7t5Z5Hw"
+
+reservations <- read_sheet(sheet_id)
+older_reservations <- read_sheet(sheet_id_older_reservations)
+```
+
+```{r}
+
+##################
+### Processing ###
+##################
+
+# Subset reservations data to columns of interest
+reservations <- reservations %>%
+  select(`Requested arrival date`, `Requested departure date`, `Organization's Name`,
+         `Description of Event`, `Facility Requested`, 
+         `Will your group have VCU students attending?`,`How many VCU students will there be?`, 
+         `Will your group have VCU employees attending?`,`How many VCU employees will there be?`,
+         `Will your group have Non-VCU affiliated individuals attending?`,
+         `How many Non-VCU affiliated individuals will there be?`, 
+         `Is your group in the School of Life Sciences and Sustainability`, Status, 
+         `Lodge Invoice Amount`, `Education Invoice Amount`, `Research Facility Invoice Amount`,
+         `Fee Waived?`, `Waived Reason`)
+
+# Combine old reservation data (pre-google form - based on invoices only) with new
+# reservation data
+reservations <- rbind(reservations, older_reservations)
+
+# Formatting free text columns from list -> character
+reservations$`How many Non-VCU affiliated individuals will there be?` <- as.character(reservations$`How many Non-VCU affiliated individuals will there be?`)
+reservations$`How many VCU employees will there be?` <- as.character(reservations$`How many VCU employees will there be?`)
+reservations$`How many VCU students will there be?` <- as.character(reservations$`How many VCU students will there be?`)
+
+
+# Calculate additional columns and filter unfulfilled reservation requests:
+reservations <- reservations %>%
+  filter(Status == "Approved") %>%
+  mutate(
+    # Calculate number of days requested
+    length_of_stay_days = as.numeric(difftime(`Requested departure date`, `Requested arrival date`, units = "days")) + 1,
+    
+    # Extract year
+    year = year(`Requested arrival date`),
+    
+    # Approximate count of VCU students from free text response
+    count_vcu_students_low = str_first_number(`How many VCU students will there be?`),
+    count_vcu_students_high = str_last_number(`How many VCU students will there be?`),
+    
+    # Approximate count of VCU staff/faculty from free text response
+    count_vcu_staff_low = str_first_number(`How many VCU employees will there be?`),
+    count_vcu_staff_high = str_last_number(`How many VCU employees will there be?`),
+    
+    # Approximate count of non-VCU persons from free text response
+    count_non_vcu_low = str_first_number(`How many Non-VCU affiliated individuals will there be?`),
+    count_non_vcu_high = str_last_number(`How many Non-VCU affiliated individuals will there be?`)
+    )
+
+#########################
+### Calculate Metrics ###
+#########################
+
+# 1. Count of students visiting per year
+
+students_per_year <- reservations %>%
+  group_by(year) %>%
+  summarize(
+    students_per_year_low_estimate = sum(count_vcu_students_low, na.rm = TRUE),
+    students_per_year_high_estimate = sum(count_vcu_students_high, na.rm = TRUE)
+  )
+
+# 2. Count of VCU staff and faculty visiting per year
+
+vcu_staff_per_year <- reservations %>%
+  group_by(year) %>%
+  summarize(
+    vcu_staff_per_year_low_estimate = sum(count_vcu_staff_low, na.rm = TRUE),
+    vcu_staff_per_year_high_estimate = sum(count_vcu_staff_high, na.rm = TRUE)
+  )
+
+# 3. Count of non-VCU visitors per year
+
+non_vcu_per_year <- reservations %>%
+  group_by(year) %>%
+  summarize(
+    non_vcu_per_year_low_estimate = sum(count_non_vcu_low, na.rm = TRUE),
+    non_vcu_per_year_high_estimate = sum(count_non_vcu_high, na.rm = TRUE)
+  )
+
+# 4. Days, proportion, and estimated revenue per year of lodge usage
+
+lodge_usage_days <- reservations %>%
+  filter(grepl("Inger Rice Lodge", `Facility Requested`)) %>%
+  group_by(year) %>%
+  summarize(
+    lodge_usage_days = sum(length_of_stay_days)
+  )
+
+lodge_usage_proportion <- lodge_usage_days %>%
+  mutate(
+    lodge_usage_proportion = as.numeric(lodge_usage_days)/365
+  )
+
+lodge_cost <- 15 # $15 per person per day
+
+lodge_revenue <- reservations %>%
+  filter(grepl("Inger Rice Lodge", `Facility Requested`)) %>% 
+  filter(`Fee Waived?` == "Yes") %>%
+  replace_na(list(count_vcu_students_low = 0, count_vcu_students_high = 0,
+                  count_vcu_staff_low = 0, count_vcu_staff_high = 0,
+                  count_non_vcu_low = 0, count_non_vcu_high = 0)
+             ) %>%
+  mutate(
+    total_persons_low_estimate = as.numeric(count_vcu_students_low) + as.numeric(count_vcu_staff_low) + as.numeric(count_non_vcu_low),
+    total_persons_high_estimate = as.numeric(count_vcu_students_high) + as.numeric(count_vcu_staff_high) + as.numeric(count_non_vcu_high)
+  ) %>%
+  mutate(
+    total_persons_low_estimate = case_when(
+      total_persons_low_estimate > 22 ~ 22,
+      .default = total_persons_low_estimate
+    ),
+    total_persons_high_estimate = case_when(
+      total_persons_high_estimate > 22 ~ 22,
+      .default = total_persons_high_estimate
+    )
+  ) %>%
+  mutate(
+    revenue_per_event_low_estimate = length_of_stay_days*lodge_cost*total_persons_low_estimate,
+    revenue_per_event_high_estimate = length_of_stay_days*lodge_cost*total_persons_high_estimate
+  ) %>%
+  group_by(year) %>%
+  summarize(
+    lodge_revenue_low_estimate = sum(revenue_per_event_low_estimate, na.rm = TRUE),
+    lodge_revenue_high_estimate = sum(revenue_per_event_high_estimate, na.rm = TRUE)
+    )
+
+# 5. Days, proportion, and estimated revenue per year of conference room usage
+
+conference_usage_days <- reservations %>%
+  filter(grepl("Rice Education Building's Conference Room", `Facility Requested`)) %>%
+  group_by(year) %>%
+  summarize(
+    conference_usage_days = sum(length_of_stay_days)
+  )
+
+conference_usage_proportion <- conference_usage_days %>%
+  mutate(
+    conference_usage_proportion = as.numeric(conference_usage_days)/365
+  )
+
+conference_cost <- 400
+
+conference_revenue <- reservations %>%
+  filter(grepl("Rice Education Building's Conference Room", `Facility Requested`)) %>% 
+  filter(`Fee Waived?` == "Yes") %>%
+  mutate(
+    revenue_per_event = length_of_stay_days*conference_cost
+  ) %>%
+  group_by(year) %>%
+  summarize(conference_revenue = sum(revenue_per_event))
+  
+
+# 6. Proportion of events with waved fees
+
+      # Fees are waived for groups affiliated with SLSS
+
+fees_waived <- reservations %>%
+    filter(`Fee Waived?` == "Yes")
+
+# 7. Paid Invoices
+
+paid_reservations <- reservations %>%
+  filter(!is.na(`Lodge Invoice Amount`) | !is.na(`Education Invoice Amount`) | !is.na(`Research Facility Invoice Amount`))
+
+paid_invoices_by_year <- paid_reservations %>%
+  group_by(year) %>%
+  summarize(lodge_invoices = sum(`Lodge Invoice Amount`, na.rm=TRUE),
+            education_invoices = sum(`Education Invoice Amount`, na.rm=TRUE),
+            research_invoices = sum(`Research Facility Invoice Amount`, na.rm=TRUE))
+
+```
+
+This is a report of facility usage and engagement for the Rice Rivers Center. Data for this report
+comes from the following sources:
+
+1. Responses to the Rice Rivers Center [Reservation Form](https://ricerivers.vcu.edu/facilities/reservations/) (which handles reservations for RRC's
+Inger Rice Lodge and Rice Education Building's Conference Room). 
+2. Submissions to the Rice Rivers Center [Project Registration Form](https://ricerivers.vcu.edu/research/conduct-research-at-rice/project-registration/) (which handles research project
+applications for VCU students, faculty, and staff.)
+
+# Facilities Usage
+
+```{r}
+
+# Count of reservation requests by facility for the current year
+current_year <- year(Sys.Date())
+
+# Number of requests for the lodge
+lodge_reservation_request_count <- as.numeric(nrow(reservations %>%
+                                          filter(year == current_year & 
+                                                   grepl("Inger Rice Lodge", 
+                                                         `Facility Requested`))))
+
+# Number of requests for the lodge
+education_reservation_request_count <- as.numeric(nrow(reservations %>%
+                                              filter(year == current_year & 
+                                              grepl("Rice Education Building's Conference Room", 
+                                                    `Facility Requested`))))
+
+# Invoice total:
+current_year_invoices <- paid_invoices_by_year %>%
+  filter(year == current_year)
+
+current_year_lodge_invoices <- current_year_invoices$lodge_invoices
+current_year_lodge_invoices_formatted <- paste0("$", format(current_year_lodge_invoices, big.mark=","))
+current_year_education_invoices <- current_year_invoices$education_invoices
+current_year_education_invoices_formatted <- paste0("$", format(current_year_education_invoices, big.mark=","))
+
+current_year_total_invoices <- current_year_lodge_invoices + current_year_education_invoices
+current_year_total_invoices_formatted <- paste0("$", format(current_year_total_invoices, big.mark=","))
+
+# Days booked
+current_year_lodge_usage <- (lodge_usage_days %>%
+  filter(year == current_year))$lodge_usage_days
+
+current_year_education_usage <- (conference_usage_days %>%
+  filter(year == current_year))$conference_usage_days
+
+```
+
+* In `{r} current_year`, there were `{r} lodge_reservation_request_count` reservation requests for the Inger Rice Lodge and `{r} education_reservation_request_count` reservation requests for the Education Building's Conference Room.
+* The Inger Rice Lodge was booked for `{r} current_year_lodge_usage` days in `{r} current_year`. 
+* The Education Building's Conference Room was booked for `{r} current_year_education_usage` days in `{r} current_year`.
+* So far in `{r} current_year`, Rice Rivers Center facilities reservations have generated `{r} current_year_total_invoices_formatted` in revenue. 
+  + Inger Rice Lodge reservations have generated `{r} current_year_lodge_invoices_formatted`.
+  + Education Building's Conference Room reservations have generated `{r} current_year_education_invoices_formatted`.
+  
+Facilities have been utilized by VCU students, VCU staff & faculty, and non-VCU individuals. The table below provides an estimate on the number of individuals using Rice facilities each year. These estimates are based on responses from the RRC Reservation Form. 
+
+```{r}
+# Merge tables 
+
+usage_estimate <- merge(students_per_year, vcu_staff_per_year, by="year")
+usage_estimate <- merge(usage_estimate, non_vcu_per_year, by="year")
+usage_estimate <- usage_estimate %>%
+  mutate(
+    total_low_estimate = students_per_year_low_estimate + vcu_staff_per_year_low_estimate + non_vcu_per_year_low_estimate,
+    total_high_estimate = students_per_year_high_estimate + vcu_staff_per_year_high_estimate + non_vcu_per_year_high_estimate
+  ) %>%
+  mutate(
+    student_estimate = paste0(students_per_year_low_estimate, " - ", students_per_year_high_estimate),
+    staff_estimate = paste0(vcu_staff_per_year_low_estimate, " - ", vcu_staff_per_year_high_estimate),
+    non_vcu_estimate = paste0(non_vcu_per_year_low_estimate, " - ", non_vcu_per_year_high_estimate),
+    total_estimate = paste0(total_low_estimate, " - ", total_high_estimate)
+  ) %>%
+  select(year, student_estimate, staff_estimate, non_vcu_estimate, total_estimate)
+
+knitr::kable(usage_estimate,
+             caption = "Count of individual usage of the Inger Rice Lodge and the Education Building Conference Room",
+             format = "simple",
+             col.names = c("Year", "VCU Students", "VCU Staff & Faculty", "Non-VCU Individuals", "Total"),
+             align = c("l", "c", "c", "c", "r"))
+
+```
+
+```{r}
+
+# Waived Usage Fees
+current_year_waived_count <- nrow(fees_waived %>%
+                                filter(year == current_year))
+current_year_total_count <- nrow(reservations %>%
+                                   filter(year == current_year))
+
+```
+
+\
+Facility usage fees were waived for `{r} current_year_waived_count` out of `{r} current_year_total_count` total reservations in `{r} current_year`. Fees can be waived for non-profit groups, internal groups, or when there are issues with the facilities. Shown below is the breakdown of reasons for waived fees in `{r} current_year`. 
+
+```{r}
+#| output: false
+
+waived_reason_proportion <- fees_waived %>%
+  group_by(year, `Waived Reason`) %>%
+  summarize(records = n()) %>%
+  group_by(year) %>%
+  mutate(proportion = paste0(format(round(records/sum(records)*100, 2), nsmall=2),"%")) %>%
+  select(year, `Waived Reason`, proportion) %>%
+  pivot_wider(
+    names_from = `Waived Reason`, 
+    values_from = proportion) %>%
+  ungroup() %>%
+  replace(is.na(.), "0%") %>%
+  select(-year) 
+  
+```
+
+```{r}
+knitr::kable(waived_reason_proportion,
+             caption = paste0("Reasons for Waived Fees in ", current_year),
+             format = "simple",
+             align = c("c", "c", "c")) 
+
+```
+
+
+
+
+### VCU Student Engagement
+
+
+```{r}
+#| output: false
+
+student_reservations <- reservations %>%
+  filter(`Will your group have VCU students attending?` == "Yes")
+
+# Proportion of student group reservations that use lodge, conference room, or both
+student_reservation_facility_usage <- student_reservations %>%
+  group_by(year, `Facility Requested`) %>%
+  summarize(records = n()) %>%
+  group_by(year) %>%
+  mutate(proportion = paste0(format(round(records/sum(records)*100, 2), nsmall=2),"%")) %>%
+  select(year, `Facility Requested`, proportion) %>%
+  pivot_wider(
+    names_from = `Facility Requested`, 
+    values_from = proportion
+  ) %>%
+  ungroup() %>%
+  replace(is.na(.), "0%") %>%
+  rename(Both = `Rice Education Building's Conference Room, Inger Rice Lodge`)
+
+```
+
+```{r}
+
+knitr::kable(student_reservation_facility_usage,
+             caption = "Proportion of Facility Usage by Reservations incvolving VCU Students",
+             format = "simple",
+             col.names = c("Year", "Inger Rice Lodge Only", "Rice Education Building Only", "Both Facilities"),
+             align = c("l", "c", "c", "c"))
+
+```
+
+\n
+In 2026, the following groups reserved facilities at the Rice Rivers Center and brought VCU students:
+
+```{r}
+#| results: "asis"
+
+student_orgs <- unique(student_reservations$`Organization's Name`[student_reservations$year == 2026])
+cat(paste("-", student_orgs), sep="\n")
+
+```
+
+### VCU Faculty & Staff Engagement
+
+```{r}
+#| output: false
+
+staff_reservations <- reservations %>%
+  filter(`Will your group have VCU employees attending?` == "Yes")
+
+# Proportion of student group reservations that use lodge, conference room, or both
+staff_reservation_facility_usage <- staff_reservations %>%
+  group_by(year, `Facility Requested`) %>%
+  summarize(records = n()) %>%
+  group_by(year) %>%
+  mutate(proportion = paste0(format(round(records/sum(records)*100, 2), nsmall=2),"%")) %>%
+  select(year, `Facility Requested`, proportion) %>%
+  pivot_wider(
+    names_from = `Facility Requested`, 
+    values_from = proportion
+  ) %>%
+  ungroup() %>%
+  replace(is.na(.), "0%") %>%
+  rename(Both = `Rice Education Building's Conference Room, Inger Rice Lodge`)
+
+```
+
+```{r}
+
+knitr::kable(staff_reservation_facility_usage,
+             caption = "Proportion of Facility Usage by Reservations involving VCU Faculty & Staff",
+             format = "simple",
+             col.names = c("Year", "Inger Rice Lodge Only", "Rice Education Building Only", "Both Facilities"),
+             align = c("l", "c", "c", "c"))
+
+```
+
+\n
+In 2026, the following groups reserved facilities at the Rice Rivers Center and brought VCU faculty and staff:
+
+```{r}
+#| results: "asis"
+
+staff_orgs <- unique(staff_reservations$`Organization's Name`[staff_reservations$year == 2026])
+cat(paste("-", staff_orgs), sep="\n")
+
+```
+
+### Non-VCU Engagement
+
+```{r}
+#| output: false
+
+non_vcu_reservations <- reservations %>%
+  filter(`Will your group have Non-VCU affiliated individuals attending?` == "Yes")
+
+# Proportion of student group reservations that use lodge, conference room, or both
+non_vcu_reservation_facility_usage <- non_vcu_reservations %>%
+  group_by(year, `Facility Requested`) %>%
+  summarize(records = n()) %>%
+  group_by(year) %>%
+  mutate(proportion = paste0(format(round(records/sum(records)*100, 2), nsmall=2),"%")) %>%
+  select(year, `Facility Requested`, proportion) %>%
+  pivot_wider(
+    names_from = `Facility Requested`, 
+    values_from = proportion
+  ) %>%
+  ungroup() %>%
+  replace(is.na(.), "0%") %>%
+  rename(Both = `Rice Education Building's Conference Room, Inger Rice Lodge`)
+
+```
+
+```{r}
+
+knitr::kable(non_vcu_reservation_facility_usage,
+             caption = "Proportion of Facility Usage by Reservations involving Non-VCU Affiliated Individuals",
+             format = "simple",
+             col.names = c("Year", "Inger Rice Lodge Only", "Rice Education Building Only", "Both Facilities"),
+             align = c("l", "c", "c", "c"))
+
+```
+
+\n
+In 2026, the following groups reserved facilities at the Rice Rivers Center and brought individuals not affiliated with VCU:
+
+```{r}
+#| results: "asis"
+
+non_vcu_orgs <- unique(non_vcu_reservations$`Organization's Name`[non_vcu_reservations$year == 2026])
+cat(paste("-", non_vcu_orgs), sep="\n")
+
+```
+

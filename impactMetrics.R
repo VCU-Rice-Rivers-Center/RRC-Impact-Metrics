@@ -1,6 +1,7 @@
 # Load packages
 library(googlesheets4)
 library(dplyr)
+library(tidyr)
 library(lubridate)
 library(strex)
 
@@ -39,8 +40,9 @@ reservations$`How many VCU employees will there be?` <- as.character(reservation
 reservations$`How many VCU students will there be?` <- as.character(reservations$`How many VCU students will there be?`)
 
 
-# Calculate additional columns:
+# Calculate additional columns and filter unfulfilled reservation requests:
 reservations <- reservations %>%
+  filter(Status == "Approved") %>%
   mutate(
     # Calculate number of days requested
     length_of_stay_days = as.numeric(difftime(`Requested departure date`, `Requested arrival date`, units = "days")) + 1,
@@ -92,4 +94,124 @@ non_vcu_per_year <- reservations %>%
     non_vcu_per_year_high_estimate = sum(count_non_vcu_high, na.rm = TRUE)
   )
 
-4. 
+# 4. Days, proportion, and estimated revenue per year of lodge usage
+
+lodge_usage_days <- reservations %>%
+  filter(grepl("Inger Rice Lodge", `Facility Requested`)) %>%
+  group_by(year) %>%
+  summarize(
+    lodge_usage_days = sum(length_of_stay_days)
+  )
+
+lodge_usage_proportion <- lodge_usage_days %>%
+  mutate(
+    lodge_usage_proportion = as.numeric(lodge_usage_days)/365
+  )
+
+lodge_cost <- 15 # $15 per person per day
+
+lodge_revenue <- reservations %>%
+  filter(grepl("Inger Rice Lodge", `Facility Requested`)) %>% 
+  filter(`Is your group in the School of Life Sciences and Sustainability` == "No") %>%
+  replace_na(list(count_vcu_students_low = 0, count_vcu_students_high = 0,
+                  count_vcu_staff_low = 0, count_vcu_staff_high = 0,
+                  count_non_vcu_low = 0, count_non_vcu_high = 0)
+             ) %>%
+  mutate(
+    total_persons_low_estimate = as.numeric(count_vcu_students_low) + as.numeric(count_vcu_staff_low) + as.numeric(count_non_vcu_low),
+    total_persons_high_estimate = as.numeric(count_vcu_students_high) + as.numeric(count_vcu_staff_high) + as.numeric(count_non_vcu_high)
+  ) %>%
+  mutate(
+    total_persons_low_estimate = case_when(
+      total_persons_low_estimate > 22 ~ 22,
+      .default = total_persons_low_estimate
+    ),
+    total_persons_high_estimate = case_when(
+      total_persons_high_estimate > 22 ~ 22,
+      .default = total_persons_high_estimate
+    )
+  ) %>%
+  mutate(
+    revenue_per_event_low_estimate = length_of_stay_days*lodge_cost*total_persons_low_estimate,
+    revenue_per_event_high_estimate = length_of_stay_days*lodge_cost*total_persons_high_estimate
+  ) %>%
+  group_by(year) %>%
+  summarize(
+    lodge_revenue_low_estimate = sum(revenue_per_event_low_estimate, na.rm = TRUE),
+    lodge_revenue_high_estimate = sum(revenue_per_event_high_estimate, na.rm = TRUE)
+    )
+
+# 5. Days, proportion, and estimated revenue per year of conference room usage
+
+conference_usage_days <- reservations %>%
+  filter(grepl("Rice Education Building's Conference Room", `Facility Requested`)) %>%
+  group_by(year) %>%
+  summarize(
+    conference_usage_days = sum(length_of_stay_days)
+  )
+
+conference_usage_proportion <- conference_usage_days %>%
+  mutate(
+    conference_usage_proportion = as.numeric(conference_usage_days)/365
+  )
+
+conference_cost <- 400
+
+conference_revenue <- reservations %>%
+  filter(grepl("Rice Education Building's Conference Room", `Facility Requested`)) %>% 
+  filter(`Is your group in the School of Life Sciences and Sustainability` == "No") %>%
+  mutate(
+    revenue_per_event = length_of_stay_days*conference_cost
+  ) %>%
+  group_by(year) %>%
+  summarize(conference_revenue = sum(revenue_per_event))
+  
+
+# 6. Proportion of events with waved fees
+
+      # Fees are waived for groups affiliated with SLSS
+
+fees_waived_proportion <- nrow(
+  reservations %>%
+    select(`Is your group in the School of Life Sciences and Sustainability`) %>%
+    filter(`Is your group in the School of Life Sciences and Sustainability` == "Yes")
+) / nrow(reservations)
+
+#######################
+### Display Metrics ###
+#######################
+
+students_per_year
+
+vcu_staff_per_year
+
+non_vcu_per_year
+
+lodge_usage_days
+
+lodge_usage_proportion
+
+lodge_revenue
+
+conference_usage_days
+
+conference_usage_proportion
+
+conference_revenue
+
+fees_waived_proportion
+
+
+t <- reservations %>%
+  filter(grepl("Inger Rice Lodge", `Facility Requested`)) %>% 
+  filter(`Is your group in the School of Life Sciences and Sustainability` == "No") %>%
+  replace_na(list(count_vcu_students_low = 0, count_vcu_students_high = 0,
+                  count_vcu_staff_low = 0, count_vcu_staff_high = 0,
+                  count_non_vcu_low = 0, count_non_vcu_high = 0)
+  ) %>%
+  mutate(
+    total_persons_low_estimate = as.numeric(count_vcu_students_low) + as.numeric(count_vcu_staff_low) + as.numeric(count_non_vcu_low),
+    total_persons_high_estimate = as.numeric(count_vcu_students_high) + as.numeric(count_vcu_staff_high) + as.numeric(count_non_vcu_high),
+    revenue_per_event_low_estimate = length_of_stay_days*lodge_cost*total_persons_low_estimate,
+    revenue_per_event_high_estimate = length_of_stay_days*lodge_cost*total_persons_high_estimate
+  )
