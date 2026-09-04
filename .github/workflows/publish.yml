@@ -24,11 +24,17 @@ jobs:
         with:
           r-version: '4.3.0'
 
-      - name: Install R Dependencies
-        uses: r-lib/actions/setup-renv@v2
+      - name: Install R Packages
+        uses: r-lib/actions/setup-r-dependencies@v2
         with:
-          cache-version: 1
-
+          packages: |
+            any::googlesheets4
+            any::dplyr
+            any::tidyr
+            any::lubridate
+            any::strex
+            any::knitr
+            
       - name: Render and Publish to gh-pages
         uses: quarto-dev/quarto-actions/publish@v2
         with:
