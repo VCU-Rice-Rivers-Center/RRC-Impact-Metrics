@@ -34,6 +34,7 @@ jobs:
             any::lubridate
             any::strex
             any::knitr
+            any::rmarkdown
             
       - name: Render and Publish to gh-pages
         uses: quarto-dev/quarto-actions/publish@v2
