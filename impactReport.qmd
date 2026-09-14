@@ -287,6 +287,8 @@ current_year_education_usage <- (conference_usage_days %>%
   
 Facilities have been utilized by VCU students, VCU staff & faculty, and non-VCU individuals. The table below provides an estimate on the number of individuals using Rice facilities each year. These estimates are based on responses from the RRC Reservation Form. 
 
+##### Count of individual usage of the Inger Rice Lodge and the Education Building Conference Room
+
 ```{r}
 # Merge tables 
 
@@ -306,7 +308,6 @@ usage_estimate <- usage_estimate %>%
   select(year, student_estimate, staff_estimate, non_vcu_estimate, total_estimate)
 
 knitr::kable(usage_estimate,
-             caption = "Count of individual usage of the Inger Rice Lodge and the Education Building Conference Room",
              format = "simple",
              col.names = c("Year", "VCU Students", "VCU Staff & Faculty", "Non-VCU Individuals", "Total"),
              align = c("l", "c", "c", "c", "r"))
@@ -343,16 +344,13 @@ waived_reason_proportion <- fees_waived %>%
   select(-year) 
   
 ```
-
+##### Reasons for waived fees in `{r} current_year`
 ```{r}
 knitr::kable(waived_reason_proportion,
-             caption = paste0("Reasons for Waived Fees in ", current_year),
              format = "simple",
              align = c("c", "c", "c")) 
 
 ```
-
-
 
 
 ### VCU Student Engagement
@@ -365,26 +363,36 @@ student_reservations <- reservations %>%
   filter(`Will your group have VCU students attending?` == "Yes")
 
 # Proportion of student group reservations that use lodge, conference room, or both
+# student_reservation_facility_usage <- student_reservations %>%
+#   group_by(year, `Facility Requested`) %>%
+#   summarize(records = n()) %>%
+#   group_by(year) %>%
+#   mutate(proportion = paste0(format(round(records/sum(records)*100, 2), nsmall=2),"%")) %>%
+#   select(year, `Facility Requested`, proportion) %>%
+#   pivot_wider(
+#     names_from = `Facility Requested`, 
+#     values_from = proportion
+#   ) %>%
+#   ungroup() %>%
+#   replace(is.na(.), "0%") %>%
+#   rename(Both = `Rice Education Building's Conference Room, Inger Rice Lodge`)
+
 student_reservation_facility_usage <- student_reservations %>%
   group_by(year, `Facility Requested`) %>%
-  summarize(records = n()) %>%
-  group_by(year) %>%
-  mutate(proportion = paste0(format(round(records/sum(records)*100, 2), nsmall=2),"%")) %>%
-  select(year, `Facility Requested`, proportion) %>%
+  summarize(count = n()) %>%
   pivot_wider(
-    names_from = `Facility Requested`, 
-    values_from = proportion
+    names_from = `Facility Requested`,
+    values_from = count 
   ) %>%
   ungroup() %>%
-  replace(is.na(.), "0%") %>%
   rename(Both = `Rice Education Building's Conference Room, Inger Rice Lodge`)
-
 ```
+
+##### Count of VCU Student Group usage of Rice Facilities
 
 ```{r}
 
 knitr::kable(student_reservation_facility_usage,
-             caption = "Proportion of Facility Usage by Reservations incvolving VCU Students",
              format = "simple",
              col.names = c("Year", "Inger Rice Lodge Only", "Rice Education Building Only", "Both Facilities"),
              align = c("l", "c", "c", "c"))
@@ -411,26 +419,37 @@ staff_reservations <- reservations %>%
   filter(`Will your group have VCU employees attending?` == "Yes")
 
 # Proportion of student group reservations that use lodge, conference room, or both
+# staff_reservation_facility_usage <- staff_reservations %>%
+#   group_by(year, `Facility Requested`) %>%
+#   summarize(records = n()) %>%
+#   group_by(year) %>%
+#   mutate(proportion = paste0(format(round(records/sum(records)*100, 2), nsmall=2),"%")) %>%
+#   select(year, `Facility Requested`, proportion) %>%
+#   pivot_wider(
+#     names_from = `Facility Requested`, 
+#     values_from = proportion
+#   ) %>%
+#   ungroup() %>%
+#   replace(is.na(.), "0%") %>%
+#   rename(Both = `Rice Education Building's Conference Room, Inger Rice Lodge`)
+
 staff_reservation_facility_usage <- staff_reservations %>%
   group_by(year, `Facility Requested`) %>%
-  summarize(records = n()) %>%
-  group_by(year) %>%
-  mutate(proportion = paste0(format(round(records/sum(records)*100, 2), nsmall=2),"%")) %>%
-  select(year, `Facility Requested`, proportion) %>%
+  summarize(count = n()) %>%
   pivot_wider(
-    names_from = `Facility Requested`, 
-    values_from = proportion
+    names_from = `Facility Requested`,
+    values_from = count 
   ) %>%
   ungroup() %>%
-  replace(is.na(.), "0%") %>%
   rename(Both = `Rice Education Building's Conference Room, Inger Rice Lodge`)
 
 ```
 
+##### Count of VCU Staff Group usage of Rice Facilities
+
 ```{r}
 
 knitr::kable(staff_reservation_facility_usage,
-             caption = "Proportion of Facility Usage by Reservations involving VCU Faculty & Staff",
              format = "simple",
              col.names = c("Year", "Inger Rice Lodge Only", "Rice Education Building Only", "Both Facilities"),
              align = c("l", "c", "c", "c"))
@@ -457,26 +476,37 @@ non_vcu_reservations <- reservations %>%
   filter(`Will your group have Non-VCU affiliated individuals attending?` == "Yes")
 
 # Proportion of student group reservations that use lodge, conference room, or both
+# non_vcu_reservation_facility_usage <- non_vcu_reservations %>%
+#   group_by(year, `Facility Requested`) %>%
+#   summarize(records = n()) %>%
+#   group_by(year) %>%
+#   mutate(proportion = paste0(format(round(records/sum(records)*100, 2), nsmall=2),"%")) %>%
+#   select(year, `Facility Requested`, proportion) %>%
+#   pivot_wider(
+#     names_from = `Facility Requested`, 
+#     values_from = proportion
+#   ) %>%
+#   ungroup() %>%
+#   replace(is.na(.), "0%") %>%
+#   rename(Both = `Rice Education Building's Conference Room, Inger Rice Lodge`)
+
 non_vcu_reservation_facility_usage <- non_vcu_reservations %>%
   group_by(year, `Facility Requested`) %>%
-  summarize(records = n()) %>%
-  group_by(year) %>%
-  mutate(proportion = paste0(format(round(records/sum(records)*100, 2), nsmall=2),"%")) %>%
-  select(year, `Facility Requested`, proportion) %>%
+  summarize(count = n()) %>%
   pivot_wider(
-    names_from = `Facility Requested`, 
-    values_from = proportion
+    names_from = `Facility Requested`,
+    values_from = count 
   ) %>%
   ungroup() %>%
-  replace(is.na(.), "0%") %>%
   rename(Both = `Rice Education Building's Conference Room, Inger Rice Lodge`)
 
 ```
 
+##### Count of Non-VCU Group usage of Rice Facilities
+
 ```{r}
 
 knitr::kable(non_vcu_reservation_facility_usage,
-             caption = "Proportion of Facility Usage by Reservations involving Non-VCU Affiliated Individuals",
              format = "simple",
              col.names = c("Year", "Inger Rice Lodge Only", "Rice Education Building Only", "Both Facilities"),
              align = c("l", "c", "c", "c"))
