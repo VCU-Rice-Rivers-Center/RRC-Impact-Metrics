@@ -1,0 +1,242 @@
+---
+title: "Rice Rivers Center - Impact Reporting"
+date: "`r Sys.Date()`"
+format: 
+  html: 
+    self-contained: true
+    grid:
+      margin-width: 350px
+execute:
+  echo: false
+reference-location: margin
+---
+
+```{r}
+#| output: false
+
+# Load packages
+library(googlesheets4)
+library(dplyr)
+library(tidyr)
+library(lubridate)
+library(strex)
+library(knitr)
+library(plotly)
+```
+
+```{r}
+#| output: false
+
+######################
+### Authentication ###
+######################
+
+# Fetch the key from the system environment
+gcp_key <- Sys.getenv("GCP_SA_KEY")
+
+if (nzchar(gcp_key)) {
+  # Authenticate using the github secret key
+  gs4_auth(path = gcp_key)
+  message("Authenticated using GCP Service Account Secret")
+} else {
+  # Authenticate using a browser if testing locally
+  gs4_auth()
+  message("Authenticated via browser.")
+}
+
+#################
+### Read Data ###
+#################
+
+# Sheet ID for reservation request form responses:
+sheet_id <- "1ed3zy3QERXUd7yMlfxtwxqAu3sqhpNWP-TScr1Y_dMM"
+sheet_id_older_reservations <- "1nd2EMrJhVLAGLXVK840sgU7gEmqqZci1OvvG7t5Z5Hw"
+
+reservations <- read_sheet(sheet_id)
+older_reservations <- read_sheet(sheet_id_older_reservations)
+```
+
+```{r}
+
+##################
+### Processing ###
+##################
+
+# Subset reservations data to columns of interest
+reservations <- reservations %>%
+  select(`Requested arrival date`, `Requested departure date`, `Organization's Name`,
+         `Description of Event`, `Facility Requested`, 
+         `Will your group have VCU students attending?`,`How many VCU students will there be?`, 
+         `Will your group have VCU employees attending?`,`How many VCU employees will there be?`,
+         `Will your group have Non-VCU affiliated individuals attending?`,
+         `How many Non-VCU affiliated individuals will there be?`, 
+         `Is your group in the School of Life Sciences and Sustainability`, Status, 
+         `Lodge Invoice Amount`, `Education Invoice Amount`, `Research Facility Invoice Amount`,
+         `Fee Waived?`, `Waived Reason`)
+
+# Combine old reservation data (pre-google form - based on invoices only) with new
+# reservation data
+reservations <- rbind(reservations, older_reservations)
+
+# Formatting free text columns from list -> character
+reservations$`How many Non-VCU affiliated individuals will there be?` <- as.character(reservations$`How many Non-VCU affiliated individuals will there be?`)
+reservations$`How many VCU employees will there be?` <- as.character(reservations$`How many VCU employees will there be?`)
+reservations$`How many VCU students will there be?` <- as.character(reservations$`How many VCU students will there be?`)
+
+
+# Calculate additional columns and filter unfulfilled reservation requests:
+reservations <- reservations %>%
+  filter(Status == "Approved") %>%
+  mutate(
+    # Calculate number of days requested
+    length_of_stay_days = as.numeric(difftime(`Requested departure date`, `Requested arrival date`, units = "days")) + 1,
+    
+    # Extract year
+    year = year(`Requested arrival date`),
+    
+    # Approximate count of VCU students from free text response
+    count_vcu_students_low = str_first_number(`How many VCU students will there be?`),
+    count_vcu_students_high = str_last_number(`How many VCU students will there be?`),
+    count_vcu_students_mean = round((count_vcu_students_low + count_vcu_students_high)/2),
+    
+    # Approximate count of VCU staff/faculty from free text response
+    count_vcu_staff_low = str_first_number(`How many VCU employees will there be?`),
+    count_vcu_staff_high = str_last_number(`How many VCU employees will there be?`),
+    count_vcu_staff_mean = round((count_vcu_staff_low + count_vcu_staff_high)/2),
+    
+    # Approximate count of non-VCU persons from free text response
+    count_non_vcu_low = str_first_number(`How many Non-VCU affiliated individuals will there be?`),
+    count_non_vcu_high = str_last_number(`How many Non-VCU affiliated individuals will there be?`),
+    count_non_vcu_mean = round((count_non_vcu_low + count_non_vcu_high)/2)
+
+    )
+
+```
+
+# Facility Reservations
+
+```{r}
+#| output: false
+
+# Group by number of lodge reservations by year, by status (completed or upcoming)
+
+today <- Sys.Date()
+current_year <- as.character(year(today))
+
+lodge_reservations_by_year <- reservations %>%
+  filter(grepl("Inger Rice Lodge", `Facility Requested`)) %>%
+  mutate(Fulfilled = case_when(`Requested departure date`< today ~ "Completed",
+                               `Requested departure date` >= today ~ "Upcoming")) %>%
+  mutate(year = as.character(year),
+         facility = "Lodge") %>%
+  group_by(year, Fulfilled, facility) %>%
+  summarize(count = n())
+
+education_reservations_by_year <- reservations %>%
+  filter(grepl("Rice Education Building's Conference Room", `Facility Requested`)) %>%
+  mutate(Fulfilled = case_when(`Requested departure date`< today ~ "Completed",
+                               `Requested departure date` >= today ~ "Upcoming")) %>%
+  mutate(year = as.character(year),
+         facility = "Education Building") %>%
+  group_by(year, Fulfilled, facility) %>%
+  summarize(count = n())
+
+combined_reservations_by_year <- rbind(lodge_reservations_by_year, education_reservations_by_year)
+
+fig01 <- combined_reservations_by_year %>% filter(year == "2026") %>%
+  group_by(Fulfilled) %>%
+  arrange(Fulfilled) %>%
+  plot_ly(
+    x = ~facility,
+    y = ~count,
+    color = ~Fulfilled,
+    colors = c("#006894", "#9BBFCE"),
+    type = "bar",
+    legendgroup = ~Fulfilled
+  ) %>%
+  layout(
+    xaxis = list(title = "2026")
+  ) 
+
+fig02 <- combined_reservations_by_year %>% filter(year == "2027") %>%
+  group_by(Fulfilled) %>%
+  arrange(Fulfilled) %>%
+  plot_ly(
+    x = ~facility,
+    y = ~count,
+    color = ~Fulfilled,
+    colors = c("#9BBFCE"),
+    type = "bar",
+    legendgroup = ~Fulfilled,
+    showlegend = FALSE
+  ) %>%
+  layout(
+    xaxis = list(title = "2027")
+  ) 
+ 
+```
+
+
+
+```{r}
+
+subplot(fig01, fig02, titleX=TRUE, shareY=TRUE) %>%
+  layout(barmode = "stack", title = "Number of Facility Reservations", showlegend=TRUE)
+
+```
+
+```{r}
+
+# Calculate number of days reserved for the current year
+lodge_usage_days <- reservations %>%
+  filter(grepl("Inger Rice Lodge", `Facility Requested`)) %>%
+  filter(year == current_year)
+lodge_usage_days <- sum(lodge_usage_days$length_of_stay_days)
+
+education_usage_days <- reservations %>%
+  filter(grepl("Rice Education Building's Conference Room", `Facility Requested`)) %>%
+  filter(year == current_year)
+education_usage_days <- sum(education_usage_days$length_of_stay_days)
+
+```
+
+* In `{r} current_year`, the Inger Rice Lodge was booked for a total of `{r} lodge_usage_days` days.
+* In `{r} current_year`, the Rice Education Building's Conference Room was booked for a total of `{r} education_usage_days` days.
+
+```{r}
+
+visitors <- reservations %>%
+  filter(year == current_year) %>%
+  select(count_vcu_students_mean, count_vcu_staff_mean, count_non_vcu_mean)
+
+total_non_vcu <- sum(visitors$count_non_vcu_mean, na.rm = TRUE)
+total_vcu_student <- sum(visitors$count_vcu_students_mean, na.rm = TRUE)
+total_vcu_staff <- sum(visitors$count_vcu_staff_mean, na.rm = TRUE)
+
+visitor_vector <- c("VCU Students", "VCU Staff & Faculty", "Non-VCU Individuals")
+visitor_vector_count <- c(total_vcu_student, total_vcu_staff, total_non_vcu)
+
+total_visitors <- total_non_vcu + total_vcu_student + total_vcu_staff
+
+```
+
+```{r}
+
+fig03 <- plot_ly(
+    x = visitor_vector_count, 
+    y = current_year, 
+    color = visitor_vector, 
+    type = "bar",
+    orientation = "h",
+    width = "100%",
+    height = 170
+  ) %>%
+  layout(
+    barmode="stack",
+    title = paste0("Count of Visitors in ", current_year),
+    autosize = FALSE
+  )
+
+fig03
+
+```

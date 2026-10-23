@@ -21,6 +21,7 @@ library(tidyr)
 library(lubridate)
 library(strex)
 library(knitr)
+library(plotly)
 ```
 
 ```{r}
@@ -238,7 +239,7 @@ Inger Rice Lodge and Rice Education Building's Conference Room).
 2. Submissions to the Rice Rivers Center [Project Registration Form](https://ricerivers.vcu.edu/research/conduct-research-at-rice/project-registration/) (which handles research project
 applications for VCU students, faculty, and staff.)
 
-# Facilities Usage
+# Facility Reservations
 
 ```{r}
 
